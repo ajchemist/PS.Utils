@@ -1,0 +1,46 @@
+name: Main CI
+
+
+on:
+  push:
+    branches: [ master ]
+    # branches-ignore:
+    #   - '**'
+  pull_request:
+    branches: [ master ]
+
+
+env:
+  module: io.github.ajchemist.PS.Utils
+
+
+jobs:
+  publish:
+    if: "!(contains(github.event.head_commit.message, 'ci skip') || contains(github.event.head_commit.message, 'skip ci'))"
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+
+
+      - name: Setup
+        run: |
+          $env:PSModulePath
+          Import-Module ./${{ env.module }}/${{ env.module }}.psm1
+          Update-ModuleManifest ./${{ env.module }}/${{ env.module }}.psd1 -ModuleVersion $(Get-ChronoVersionString)
+
+
+      - name: Publishing
+        run: |
+          Publish-Module -Path '${{ env.module }}' -NuGetApiKey ${{ secrets.PS_GALLERY_KEY }}
+
+
+      - name: Push a commit using the built-in token
+        env:
+          MODULE_MANIFEST_FILE: "${{ env.module }}/${{ env.module }}.psd1"
+        run: |
+          git config --local user.name "ajchemist"
+          git config --local user.email "1694505+ajchemist@users.noreply.github.com"
+          git add -u
+          git commit -m $(-Join($(Import-PowerShellDataFile $env:MODULE_MANIFEST_FILE).ModuleVersion, " [ci skip]"))
+          git remote -v
+          git push
